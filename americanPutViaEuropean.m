@@ -8,7 +8,7 @@ strike = 100;
 interest = 0.06;
 maturity = 0.5;
 volatility = 0.4;
-initialPrice = 80;
+initialPrice = 120;
 loops = 5000;
 timesteps = 100;
 
