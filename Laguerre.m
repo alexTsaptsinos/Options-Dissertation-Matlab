@@ -1,4 +1,5 @@
 function Y = Laguerre(S,k);
+% With each entry of S, will calculate the kth Laguerre polynomial
 
 if (k==0)
     Y = 1;

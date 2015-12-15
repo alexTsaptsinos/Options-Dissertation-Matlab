@@ -1,6 +1,6 @@
 function basisFunctions = generateBasisFunctions(S,J);
 
-% N is the number of basis functions, S is input matrix
+% J is the number of basis functions, S is input vector
 % Use weighted Laguerre polynomials
 basisFunctions = zeros(J,length(S));
 
