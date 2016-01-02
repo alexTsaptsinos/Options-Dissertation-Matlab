@@ -7,7 +7,7 @@ function [BSprice] = BSput(strike,maturity,interest,volatility,initialPrice);
 d1 = (log(initialPrice/strike) + (interest + volatility^2/2)*maturity)/(volatility*sqrt(maturity));
 d2 = (log(initialPrice/strike) + (interest - volatility^2/2)*maturity)/(volatility*sqrt(maturity));
 d2 = normcdf(-d2)*strike*exp(-interest*maturity);
-d1 = normcdf(-d1)*initialPrice;
+d1 = normcdf(-d1).*initialPrice;
 
 BSprice = d2 - d1;
 

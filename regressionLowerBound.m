@@ -1,5 +1,7 @@
 %% LSM Method
 % Function to calculate the regression coefficients using the LSM method
+clear all;
+clc;
 
 %% Set up variables
 strike = 100;
@@ -7,10 +9,10 @@ interest = 0.06;
 maturity = 0.5;
 volatility = 0.4;
 initialPrice = 80;
-loops = 10000; % number of trajectories
-timesteps = 100;
+loops = 100000; % number of trajectories
+timesteps = 50;
 timestep = maturity/timesteps;
-numberBasisFunctions = 5;
+numberBasisFunctions = 4;
 
 [regressionCoefficients] = LSMregressioncoefficients(strike,interest,maturity,volatility,initialPrice,loops,timesteps,numberBasisFunctions);
 

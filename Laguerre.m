@@ -1,4 +1,4 @@
-function Y = Laguerre(S,k);
+function Y = Laguerre(k,S);
 % With each entry of S, will calculate the kth Laguerre polynomial
 
 if (k==0)
@@ -6,7 +6,7 @@ if (k==0)
 elseif (k==1)
     Y = 1-S;
 else
-    Y = (1/k)*((2*k-1-S).*Laguerre(S,k-1)-(k-1)*Laguerre(S,k-2));
+    Y = (1/k)*((2*k-1-S).*Laguerre(k-1,S)-(k-1)*Laguerre(k-2,S));
 end
 
 end

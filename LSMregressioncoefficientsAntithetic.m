@@ -1,4 +1,4 @@
-function [beta,lowerBound,lowerBoundStdError] = LSMregressioncoefficients(K,r,T,s,S0,N,d,M)
+function [beta,lowerBound,lowerBoundStdError] = LSMregressioncoefficientsAntithetic(K,r,T,s,S0,N,d,M)
 %% LSM Method
 % Function to calculate the regression coefficients using the LSM method.
 % These regression coefficients can then be used to provide an exercise
@@ -9,13 +9,14 @@ dt = T/d;
 %% Generate sample paths
 % First we generate all the sample paths in a matrix of size (timesteps +
 % 1) x loops, so each column corresponds to a different path
-S = zeros(d+1,N);
+S = zeros(d+1,2*N);
 
 % the first entry in each row will be the initial price
 S(1,:) = S0;
 
 for i = 2:d+1;
     Z = randn(1,N);
+    Z = [Z,-Z]; % create antithetic pairs
     S(i,:) = S(i-1,:).*exp((r - s^2/2)*dt + s*Z*sqrt(dt));
 end
 
@@ -27,7 +28,7 @@ end
 h = max(K-S(2:d+1,:),0);
 
 %% Calculate regression coefficients
-C = zeros(1,N); % continuation values for each path
+C = zeros(1,2*N); % continuation values for each path
 beta = zeros(d,M); % matrix to store the regression coefficients includes time zero but not time d
 % We will work backwards from maturity. First at time d
 C(1,:) = exp(-r*dt).*h(d,:); % first set the continuation value as the final time exercise value
@@ -70,6 +71,6 @@ end
 % All that remains is to compute the value of the option.
 
 lowerBound = mean(C(1,:));
-lowerBoundStdError = std(C(1,:))/sqrt(N);
+lowerBoundStdError = std(C(1,:))/sqrt(2*N);
 %time = toc;
     
