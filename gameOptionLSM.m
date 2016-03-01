@@ -1,27 +1,27 @@
-function [controlLowerBound,europeanValue,controlStdError,totaltime,relativeStdError,beta] = singleAmericanLSMAntithetic(S0);
+function [controlApproximation,europeanValue,controlStdError,relativeStdError,beta,totaltime] = gameOptionLSM(K,r,T,s,S0,N,N2,d,M,delta)
 %% LSM Lower Bound Simulation with Antithetic Variate & Control Variate
 % This simulation will calculate a lower bound of an American Put on a
 % single asset following a geometric brownian motion
-%clc,clear all;
-%tic
+tic
+
 %% Set up variables
-K = 40; % strike price
-r = 0.06; % interest
-T = 1; % maturity
-s = 0.2; % volatility (sigma)
+%K = 100; % strike price
+%r = 0.06; % interest
+%T = 0.5; % maturity
+%s = 0.4; % volatility (sigma)
 %S0 = 36; % initial price
-N = 1*10^6; % sample paths pairs for coefficients
-N2 = 5*10^4; % sample paths pairs for valuation
-d = 32; % number of timesteps
-M = 4; % number of basis functions
+%N = 1*10^6; % sample paths pairs for coefficients
+%N2 = 5*10^4; % sample paths pairs for valuation
+%d = 32; % number of timesteps
+%M = 4; % number of basis functions
 dt = T/d; % size of each timestep
+%delta = 5; % penalty payoff
 
 %% First find European value
 europeanValue = BSput(K,T,r,s,S0)
 
 %% Get regression coefficients
-[beta,lowerBound,lowerBoundStdError] = LSMregressioncoefficientsAntithetic(K,r,T,s,S0,N,d,M);
-%coefficientsTime = toc;
+[beta] = gameOptionCoefficients(K,r,T,s,S0,N,d,M,delta);
 
 %% Generate new sample paths for lower bound
 % Generate all the new sample paths in a matrix S of size (timesteps + 1) x
@@ -43,14 +43,8 @@ end
 % that time 0 is not included so when matching with S there will be one
 % rows difference.
 h = max(K-S(2:d+1,:),0);
-%h = K-S(2:d+1,:);
-% %set the final payoff
-% h(d,:) = exp(-r*T)*max(K - S(d+1,:),0);
-% 
-% for i = 1:d
-%     h(i,:) = exp(-r*dt*i)*max(K - S(i+1,:),0);
-% end
-
+g = h + delta; % penalty matrix
+g(d,:) = h(d,:); % take off penalty at maturity
 
 %% Compute the continuation matrix
 C = zeros(d,2*N2); % continuation matrix. no time zero, but time d
@@ -65,11 +59,22 @@ end
 controlVariate = zeros(1,2*N2); % stores the control variate values
 Y = zeros(1,2*N2);
 for i = 1:2*N2
-    indx = find(h(:,i) >= C(:,i) & h(:,i)>0,1);
-    if indx
-        Y(i) = exp(-r*dt*indx)*h(indx,i);
-        controlVariate(i) = exp(-r*dt*indx)*BSput(K,(d-indx)*dt,r,s,S(indx+1,i));
+    indx1 = find(h(:,i) >= C(:,i) & h(:,i)>0,1);
+    indx2 = find(g(:,i) <= C(:,i),1);
+    if isempty(indx1) == 1
+        indx1 = d+1;
     end
+    
+    if isempty(indx2) == 1
+        indx2 = d; % exercise at maturity always
+    end
+    %indx = min(indx1,indx2);
+    if indx1 <= indx2
+        Y(1,i) = exp(-r*dt*indx1)*h(indx1,i);
+    else
+        Y(1,i) = exp(-r*dt*indx2)*g(indx2,i);
+    end
+    %controlVariate(1,i) = exp(-r*dt*indx)*BSput(K,(d-indx)*dt,r,s,S(indx+1,i));
     %Y(i) = h(find(h(:,i) >= C(:,i),1),i);
 end
 
@@ -79,14 +84,13 @@ covarianceEstimate = mean(Y.*controlVariate);
 varianceEstimate = mean(controlVariate.^2);
 controlVariateConstant = -(covarianceEstimate - meanNormal*meanControl)/(varianceEstimate - meanControl^2);
 Z = Y + controlVariateConstant*(controlVariate - europeanValue);
-% 
-% LSMlowerbound = meanNormal
-% LSMstdError = std(Y)/sqrt(2*N2)
 
-controlLowerBound = mean(Z)
-controlStdError = std(Z)/sqrt(2*N2)
-relativeStdError = abs(controlStdError/controlLowerBound)*100;
-totaltime = 0;
-
+% control variate is fucking up so just use normal
+controlApproximation = mean(Y)
+controlStdError = std(Y)/sqrt(2*N2)
+relativeStdError = abs(controlStdError/controlApproximation)*100;
+%controlApproximation = mean(Z)
+%controlStdError = std(Z)/sqrt(2*N2)
+totaltime = toc
 end
 

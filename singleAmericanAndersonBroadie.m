@@ -1,7 +1,7 @@
 %% Anderson Broadie Simulation
 % This simulation will calculate an upper and lower bound of an American
 % Put on a single asset following a geometric brownian motion
-clear all, clc, clf;
+clear all, clc;
 tic
 %% Set up variables
 K = 40; % strike price
@@ -9,34 +9,35 @@ r = 0.06; % interest
 T = 1; % maturity
 s = 0.2; % volatility (sigma)
 S0 = 36; % initial price
-N = 100; % sample paths for upper bound
+N = 10; % sample paths for upper bound
 d = 50; % number of timesteps
-N1 = 1*10^6;%2*10^6; % number of sample paths for lower bound
+%N1 = 1*10^6;%2*10^6; % number of sample paths for lower bound
 N2 = 10000; % number of subpath loops at continuation
 N3 = 10000; % number of subpath loops at exercise
 M = 4; % number of basis functions
 dt = T/d; % size of each timestep
 
 %% First find European value
-europeanValue = BSput(K,T,r,s,S0)
+%europeanValue = BSput(K,T,r,s,S0);
 
 %% Calculate Lower Bound and Regression Coefficients
 % Utilise the LSM method to find a lower bound and give us regression
 % coefficients which we can then use to define an exercise policy.
 % Remember beta includes 0 but not d
-[beta,lowerBound,lowerBoundStdError] = LSMregressioncoefficients(K,r,T,s,S0,N1,d,M);
-lbtime = toc
+[controlLowerBound,europeanValue,controlStdError,totaltime,relativeStdError,beta] = singleAmericanLSMAntithetic(S0);
+lbtime = toc;
 
 %% Generate sample paths
 % Generate all the new sample paths in a matrix S of size (timesteps +
 % 1) x loops, so each column corresponds to a different path
-S = zeros(d+1,N);
+S = zeros(d+1,2*N);
 
 % the first entry in each row will be the initial price
 S(1,:) = S0;
 
 for i = 2:d+1;
     Z = randn(1,N);
+    Z = [Z,-Z]; % create antithetic pairs
     S(i,:) = S(i-1,:).*exp((r - s^2/2)*dt + s*Z*sqrt(dt));
 end
 

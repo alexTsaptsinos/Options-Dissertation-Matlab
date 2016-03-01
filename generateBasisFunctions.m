@@ -6,7 +6,7 @@ basisFunctions = zeros(length(S),M);
 
 % Must make a choice of basis functions
 
-%% Laguerre
+% %% Laguerre
 for i = 1:M
     basisFunctions(:,i) = Laguerre(i-1,S);
 end
@@ -16,7 +16,7 @@ end
 %    basisFunctions(:,i) = exp(-S/2).*Laguerre(i-1,S);
 % end
 % 
-% %% Hermite
+%% Hermite
 % for i = 1:M
 %     basisFunctions(:,i) = Hermite(i-1,S);
 % end
