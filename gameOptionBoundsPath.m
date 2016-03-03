@@ -1,4 +1,4 @@
-function [europeanValue,martApproximation,martStdError,martRelativeStdError,martApproximation2,martStdError2,martRelativeStdError2,totaltime] = gameOptionMartingale(S0,d);
+function [europeanValue,lowerBound,lowerStdError,lowerRelativeStdError,upperBound,upperStdError,upperRelativeStdError,martApproximation,totaltime] = gameOptionBoundsPath(S0,d);
 %% LSM Lower Bound Simulation with Antithetic Variate & Control Variate
 % This simulation will calculate an upper bound of a game option with put
 % payoff.
@@ -10,14 +10,13 @@ r = 0.06; % interest
 T = 0.5; % maturity
 s = 0.4; % volatility (sigma)
 %S0 = 36; % initial price
-N = 1*10^5; % sample paths pairs for coefficients
-N2 = 5*10^3; % sample path pairs for lower bound valuation
+N = 1*10^4; % sample paths pairs for coefficients
+N2 = 5*10^3; % sample path pairs for bound valuation
 N3 = 5*10^3; % subloops
-%d = 600; % number of timesteps
+%d = 500; % number of timesteps
 M = 4; % number of basis functions
 dt = T/d; % size of each timestep
 delta = 5; % penalty payoff
-trueValue = 2.54;
 
 %% First find European value
 europeanValue = BSput(K,T,r,s,S0)
@@ -27,7 +26,7 @@ europeanValue = BSput(K,T,r,s,S0)
 %[controlApproximation,europeanValue,controlStdError,beta] = gameOptionLSM(K,r,T,s,S0,N,N2,d,M,delta);
 [beta] = gameOptionCoefficients(K,r,T,s,S0,N,d,M,delta);
 
-%% Generate new sample paths for lower bound
+%% Generate new sample paths for bounds
 % Generate all the new sample paths in a matrix S of size (timesteps + 1) x
 % loops, so each column corresponds to a different path
 S = zeros(d+1,2*N2);
@@ -59,10 +58,12 @@ for i = 1:d-1
     C(i,:) = D*beta(i+1,:)';
 end
 
+
 %% Find the martingale value at 0
 Y = zeros(1,2*N2);
 for i = 1:2*N2
     indx1 = find(h(:,i) >= C(:,i) & h(:,i)>0,1);
+    %indx1 = find(h(:,i) >= C(:,i),1);
     indx2 = find(g(:,i) <= C(:,i),1);
     if isempty(indx1) == 1
         indx1 = d+1;
@@ -78,10 +79,37 @@ for i = 1:2*N2
         Y(1,i) = exp(-r*dt*indx2)*g(indx2,i);
     end
 end
-thisApprox = mean(Y)
+thisApprox = mean(Y);
+
+%% Find the approximate sigma
+sigma = zeros(1,2*N2); % stores the estimated stopping time sigma for each path
+for i = 1:2*N2
+    indx = find(g(:,i) <= C(:,i),1);
+    if indx
+        sigma(1,i) = indx; % stores the cancellation time
+    else
+        sigma(1,i) = d; % always exercise at maturity
+    end
+end
+
+%% Find the approximate tau
+tau = zeros(1,2*N2); % stores the estimated stopping time tau for each path
+for i = 1:2*N2
+    indx = find(h(:,i) >= C(:,i) & h(:,i) > 0,1);
+    %indx = find(h(:,i) >= C(:,i),1);
+    if indx
+        tau(1,i) = indx; % stores the exercise time
+    else
+        tau(1,i) = d+1;
+    end
+end
 
 %% Build the indicator matrix which will tell us when to exercise
-I = ((h >= C) & (h>0)) | (g <= C); % so I is d x N2
+I = ((h >= C) & (h>0)) | (g <= C); % so I is d x 2*N3
+%I = (h >= C) | (g <= C); % so I is d x 2*N3
+%I = ((h >= C) & (h>0)); % so I is d x 2*N3
+%I = (g <= C);
+%I = ones(d,2*N3);
 I(d,:) = 1; % writer always cancels at maturity
 %J = ~I;
 V = min(g,max(h,C)); % no time 0
@@ -125,6 +153,7 @@ for i=1:d-1
         end
     end
     
+   % diff = exp(-r*dt*(i+1)).*V(i+1,:) - means;
     diff(I(i,:)) = exp(-r*dt*(i+1)).*tempV1(I(i,:))- means;
 
     mart(i+1,:) = mart(i,:) + diff;
@@ -133,13 +162,13 @@ for i=1:d-1
 end
 clear tempV1 tempV2 diff subD subC subH subV relaventTimePaths timePaths;
 
+martTime = toc
 for i = 1:d
     h(i,:) = exp(-r*dt*i).*h(i,:);
     g(i,:) = exp(-r*dt*i).*g(i,:);
 end
 
-
-%% Calculate Bounds, sup then inf!
+%% Path-wise approach calculation!
 % now need to calculate R(s,t) and M(s,t) for each time point t = 1,...,d
 % and s = 1,...,d
 Rt = zeros(d,2*N2);
@@ -160,42 +189,65 @@ for s = 1:d
     Rs(s,:) = tempTMax;
 end
 
-minimums = min(Rs);
+pathMinimums = min(Rs);
 
 thisApprox
-martApproximation = mean(minimums) + thisApprox
-martStdError = std(minimums)/sqrt(2*N2)
-martRelativeStdError = abs(martStdError/martApproximation)*100
-martRelativeError = abs((trueValue - martApproximation)./trueValue).*100
+martApproximation = mean(pathMinimums) + thisApprox
+martStdError = std(pathMinimums)/sqrt(2*N2)
+% martRelativeStdError = abs(martStdError/martApproximation)*100
+% martRelativeError = abs((trueValue - martApproximation)./trueValue).*100
 
-%% Now do the other way round, inf then sup!
-Rt = zeros(d,2*N2);
-Rs = zeros(d,2*N2);
-for t = 1:d
-    martTemp = mart;
-    if t ~= 1        
-        Rs(1:t-1,:) = g(1:t-1,:); % equals s times
+%% Calculate Bounds
+% now need to calculate R(s,t) and M(s,t) for each time point t = 1,...,d
+R = zeros(d,2*N2); % payoff matrix for upper bound, no time zero
+R2 = zeros(d,2*N2); % payoff matrix for lower bound, no time 0
+mart2 = mart;
+for n = 1:2*N2
+    sindx = sigma(n);
+    if sindx < d
+        % update martingale so it stops at sigma
+        mart(sindx+1:d,n) = mart(sindx,n);
+        % set R
+        R(sindx+1:d,n) = g(sindx,n);
     end
-    %size(Rt(s+1:d,:))
-    %size(g(s,:))
-    for j = t:d
-        Rs(j,:) = h(t,:);  % now s > t, so is stopped at t
-        martTemp(j,:) = martTemp(t,:);
-    end
+    R(1:sindx,n) = h(1:sindx,n);
     
-    tempDiff = Rs - martTemp;
-    tempSMin = min(tempDiff);
-    Rt(t,:) = tempSMin;
+    tindx = tau(n);
+    if tindx < d+1
+        % update martingale so it stops at tau
+        mart2(tindx:d,n) = mart2(tindx,n);
+        R2(tindx:d,n) = h(tindx,n);
+    end
+    % set R
+    if tindx > 1
+        R2(1:tindx-1,n) = g(1:tindx-1,n);
+    end
 end
 
-maximums = max(Rt);
+diff = R - mart;
+maximums = max(diff);
+diff2 = R2 - mart2;
+minimums = min(diff2);
 
-martApproximation2 = mean(maximums) + thisApprox
-martStdError2 = std(maximums)/sqrt(2*N2)
-martRelativeStdError2 = abs(martStdError2/martApproximation2)*100;
+%controlApproximation
+thisApprox
+lowerBound = mean(minimums) + thisApprox
+lowerStdError = std(minimums)/sqrt(2*N2)
+lowerRelativeStdError = abs(lowerStdError/lowerBound)*100;
+upperBound = mean(maximums) + thisApprox
+upperStdError = std(maximums)/sqrt(2*N2)
+upperRelativeStdError = abs(upperStdError/upperBound)*100;
+difference = upperBound - lowerBound
+% Construct CI
+alpha = 0.05;
+z = norminv(1-alpha/2);
+CIlower = lowerBound - z*lowerStdError;
+CIupper = upperBound + z*upperStdError;
+CI = [CIlower,CIupper]
+
+totaltime = toc
 
     
-totaltime = toc
 
 
 
